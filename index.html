@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberTool Suite — Client-Side Security Utilities</title>
+<meta name="description" content="Dependency-free, browser-only toolkit for hashing, password strength analysis, encoding, and JWT decoding. Nothing leaves your machine.">
+<style>
+  :root{
+    --bg: #0a0e12;
+    --surface: #121820;
+    --surface-2: #1a212b;
+    --line: #232c38;
+    --text: #e4e9ef;
+    --muted: #7c8896;
+    --cyan: #4fd1c5;
+    --amber: #f5a623;
+    --red: #e5484d;
+    --green: #5fd97f;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  ::selection{background:var(--cyan);color:#04211f;}
+
+  .shell{display:flex;min-height:100vh;}
+
+  /* ---- Sidebar ---- */
+  .rail{
+    width:240px;flex:0 0 240px;background:var(--surface);border-right:1px solid var(--line);
+    padding:24px 0;display:flex;flex-direction:column;
+  }
+  .brand{padding:0 20px 20px;border-bottom:1px solid var(--line);margin-bottom:12px;}
+  .brand .mark{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--cyan);text-transform:uppercase;}
+  .brand h1{font-size:18px;margin:6px 0 2px;font-weight:700;letter-spacing:-.01em;}
+  .brand p{font-size:12px;color:var(--muted);margin:0;}
+  nav{display:flex;flex-direction:column;gap:2px;padding:0 10px;}
+  .navbtn{
+    display:flex;align-items:center;gap:10px;text-align:left;background:none;border:none;color:var(--muted);
+    font-family:var(--sans);font-size:13.5px;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:500;
+  }
+  .navbtn .num{font-family:var(--mono);font-size:11px;color:var(--muted);width:16px;}
+  .navbtn:hover{background:var(--surface-2);color:var(--text);}
+  .navbtn.active{background:var(--surface-2);color:var(--cyan);}
+  .navbtn.active .num{color:var(--cyan);}
+  .rail-foot{margin-top:auto;padding:16px 20px 0;border-top:1px solid var(--line);}
+  .rail-foot p{font-size:11px;color:var(--muted);line-height:1.6;margin:12px 0 0;}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:6px;}
+
+  /* ---- Main ---- */
+  main{flex:1;padding:40px 48px;max-width:920px;}
+  .panel{display:none;}
+  .panel.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .panel h2{font-size:24px;margin:0 0 4px;letter-spacing:-.01em;}
+  .panel .sub{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:60ch;line-height:1.6;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px;margin-bottom:16px;}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+  textarea, input[type=text], input[type=password]{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;
+    padding:12px 14px;font-family:var(--mono);font-size:13.5px;resize:vertical;
+  }
+  textarea:focus, input:focus{outline:none;border-color:var(--cyan);}
+  textarea{min-height:90px;}
+  .row{display:flex;gap:14px;flex-wrap:wrap;}
+  .row > *{flex:1;min-width:220px;}
+
+  .hashline{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);
+    border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-top:10px;font-family:var(--mono);
+  }
+  .hashline .algo{color:var(--amber);font-size:11px;width:70px;flex:0 0 70px;text-transform:uppercase;font-weight:700;letter-spacing:.05em;}
+  .hashline .val{flex:1;font-size:12.5px;color:var(--text);word-break:break-all;}
+  .hashline .val.empty{color:var(--muted);}
+  .copybtn{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--muted);border-radius:6px;
+    padding:5px 10px;font-size:11px;cursor:pointer;font-family:var(--sans);flex:0 0 auto;
+  }
+  .copybtn:hover{color:var(--cyan);border-color:var(--cyan);}
+
+  .meter{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin:14px 0 8px;}
+  .meter-fill{height:100%;width:0%;transition:width .3s ease, background .3s ease;}
+  .strength-label{font-family:var(--mono);font-size:13px;font-weight:700;}
+  .checklist{list-style:none;padding:0;margin:16px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;}
+  .checklist li{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+  .checklist li.pass{color:var(--text);}
+  .checklist .chk{width:14px;height:14px;border-radius:4px;border:1px solid var(--line);flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;font-size:9px;}
+  .checklist li.pass .chk{background:var(--green);border-color:var(--green);color:#04210f;}
+  .crack{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:16px;padding-top:16px;border-top:1px solid var(--line);}
+  .crack b{color:var(--cyan);}
+
+  select{
+    background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 12px;
+    font-family:var(--mono);font-size:13px;
+  }
+  .btn{
+    background:var(--cyan);color:#04211f;border:none;border-radius:8px;padding:10px 18px;font-weight:700;
+    font-size:13px;cursor:pointer;font-family:var(--sans);
+  }
+  .btn:hover{opacity:.88;}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--muted);}
+  .btn.ghost:hover{color:var(--text);border-color:var(--text);}
+
+  .jwt-seg{border-radius:8px;padding:14px;margin-bottom:10px;font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;word-break:break-all;border:1px solid var(--line);}
+  .jwt-header{background:rgba(229,72,77,.08);border-color:rgba(229,72,77,.3);}
+  .jwt-payload{background:rgba(79,209,197,.08);border-color:rgba(79,209,197,.3);}
+  .jwt-sig{background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.3);}
+  .tag{display:inline-block;font-family:var(--sans);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:20px;margin-bottom:8px;}
+  .tag.warn{background:rgba(245,166,35,.15);color:var(--amber);}
+  .tag.danger{background:rgba(229,72,77,.15);color:var(--red);}
+  .tag.ok{background:rgba(95,217,127,.15);color:var(--green);}
+  .warnbox{background:rgba(229,72,77,.08);border:1px solid rgba(229,72,77,.35);color:#ffb3b5;border-radius:8px;padding:12px 14px;font-size:12.5px;margin-top:12px;font-family:var(--sans);}
+
+  .note{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.6;}
+
+  @media (max-width: 780px){
+    .shell{flex-direction:column;}
+    .rail{width:100%;flex:none;padding:14px 0;}
+    nav{flex-direction:row;overflow-x:auto;padding:0 14px;}
+    .rail-foot{display:none;}
+    main{padding:24px 20px;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark">CyberTool Suite</div>
+      <h1>Security Utilities</h1>
+      <p>100% client-side. No network calls.</p>
+    </div>
+    <nav>
+      <button class="navbtn active" data-panel="hash"><span class="num">01</span> Hash Generator</button>
+      <button class="navbtn" data-panel="pw"><span class="num">02</span> Password Strength</button>
+      <button class="navbtn" data-panel="enc"><span class="num">03</span> Encode / Decode</button>
+      <button class="navbtn" data-panel="jwt"><span class="num">04</span> JWT Decoder</button>
+    </nav>
+    <div class="rail-foot">
+      <p><span class="dot"></span>All computation happens locally in your browser via the Web Crypto API. No input is ever transmitted.</p>
+    </div>
+  </aside>
+
+  <main>
+    <!-- HASH GENERATOR -->
+    <section class="panel active" id="panel-hash">
+      <h2>Hash Generator</h2>
+      <p class="sub">Generate MD5, SHA-1, SHA-256, and SHA-512 digests of arbitrary text, live, in your browser.</p>
+      <div class="card">
+        <label for="hashInput">Input text</label>
+        <textarea id="hashInput" placeholder="Type or paste text to hash…"></textarea>
+        <div id="hashResults"></div>
+        <p class="note">MD5 and SHA-1 are shown for legacy/compatibility reference only — both are cryptographically broken and unsuitable for password storage or integrity guarantees. Prefer SHA-256 or SHA-512.</p>
+      </div>
+    </section>
+
+    <!-- PASSWORD STRENGTH -->
+    <section class="panel" id="panel-pw">
+      <h2>Password Strength Analyzer</h2>
+      <p class="sub">Heuristic entropy estimate plus pattern checks. Nothing you type here is stored or sent anywhere — refresh the page and it's gone.</p>
+      <div class="card">
+        <label for="pwInput">Password</label>
+        <div class="row">
+          <input type="password" id="pwInput" placeholder="Enter a password to evaluate…" autocomplete="off">
+          <button class="btn ghost" id="pwToggle" style="flex:0 0 auto;">Show</button>
+        </div>
+        <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+        <div class="strength-label" id="strengthLabel">—</div>
+        <ul class="checklist" id="checklist"></ul>
+        <div class="crack" id="crackTime"></div>
+      </div>
+    </section>
+
+    <!-- ENCODE / DECODE -->
+    <section class="panel" id="panel-enc">
+      <h2>Encode / Decode</h2>
+      <p class="sub">Base64, URL, and Hex — convert either direction instantly.</p>
+      <div class="card">
+        <div class="row" style="align-items:flex-end;">
+          <div>
+            <label for="encFormat">Format</label>
+            <select id="encFormat" style="width:100%;">
+              <option value="base64">Base64</option>
+              <option value="url">URL</option>
+              <option value="hex">Hex</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <label for="encInput">Plain text</label>
+          <textarea id="encInput" placeholder="Type text to encode…"></textarea>
+        </div>
+        <div style="margin-top:16px;">
+          <label for="encOutput">Encoded</label>
+          <textarea id="encOutput" placeholder="Type or paste to decode…"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- JWT DECODER -->
+    <section class="panel" id="panel-jwt">
+      <h2>JWT Decoder</h2>
+      <p class="sub">Paste a JSON Web Token to inspect its header and payload. Decoding is not verification — a token's signature is never checked here.</p>
+      <div class="card">
+        <label for="jwtInput">Token</label>
+        <textarea id="jwtInput" placeholder="eyJhbGciOiJIUzI1NiIs..."></textarea>
+      </div>
+      <div id="jwtOut"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ---------------- Utility: bytes/hex helpers ---------------- */
+function bufToHex(buf){
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function sha(algo, text){
+  const enc = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest(algo, enc);
+  return bufToHex(digest);
+}
+
+/* ---------------- MD5 (public-domain compact implementation) ---------------- */
+function md5(str){
+  function rotl(x,c){return (x<<c)|(x>>>(32-c));}
+  function toUtf8Bytes(s){return new TextEncoder().encode(s);}
+  const K = new Uint32Array([
+    0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
+    0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
+    0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+    0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
+    0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
+    0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
+    0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
+    0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391]);
+  const S = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+             5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+             4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+             6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  let bytes = Array.from(toUtf8Bytes(str));
+  const origLenBits = bytes.length * 8;
+  bytes.push(0x80);
+  while(bytes.length % 64 !== 56) bytes.push(0);
+  for(let i=0;i<8;i++) bytes.push((origLenBits / Math.pow(2,8*i)) & 0xff);
+
+  let a0=0x67452301,b0=0xefcdab89,c0=0x98badcfe,d0=0x10325476;
+
+  for(let chunk=0; chunk<bytes.length; chunk+=64){
+    const M = new Uint32Array(16);
+    for(let j=0;j<16;j++){
+      M[j] = bytes[chunk+j*4] | (bytes[chunk+j*4+1]<<8) | (bytes[chunk+j*4+2]<<16) | (bytes[chunk+j*4+3]<<24);
+    }
+    let A=a0,B=b0,C=c0,D=d0;
+    for(let i=0;i<64;i++){
+      let F,g;
+      if(i<16){F=(B&C)|(~B&D);g=i;}
+      else if(i<32){F=(D&B)|(~D&C);g=(5*i+1)%16;}
+      else if(i<48){F=B^C^D;g=(3*i+5)%16;}
+      else {F=C^(B|~D);g=(7*i)%16;}
+      F = (F + A + K[i] + M[g]) >>> 0;
+      A=D; D=C; C=B;
+      B = (B + rotl(F, S[i])) >>> 0;
+    }
+    a0=(a0+A)>>>0; b0=(b0+B)>>>0; c0=(c0+C)>>>0; d0=(d0+D)>>>0;
+  }
+  function toLE(n){
+    let out='';
+    for(let i=0;i<4;i++){ out += ((n>>>(8*i))&0xff).toString(16).padStart(2,'0'); }
+    return out;
+  }
+  return toLE(a0)+toLE(b0)+toLE(c0)+toLE(d0);
+}
+
+/* ---------------- Nav switching ---------------- */
+document.querySelectorAll('.navbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.panel).classList.add('active');
+  });
+});
+
+/* ---------------- Hash generator ---------------- */
+const hashInput = document.getElementById('hashInput');
+const hashResults = document.getElementById('hashResults');
+const algos = [
+  {label:'MD5', fn: (t)=>Promise.resolve(md5(t))},
+  {label:'SHA-1', fn: (t)=>sha('SHA-1', t)},
+  {label:'SHA-256', fn: (t)=>sha('SHA-256', t)},
+  {label:'SHA-512', fn: (t)=>sha('SHA-512', t)},
+];
+function renderHashSkeleton(){
+  hashResults.innerHTML = algos.map(a=>`
+    <div class="hashline" data-algo="${a.label}">
+      <span class="algo">${a.label}</span>
+      <span class="val empty">Waiting for input…</span>
+      <button class="copybtn">Copy</button>
+    </div>`).join('');
+  hashResults.querySelectorAll('.copybtn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const val = b.previousElementSibling.textContent;
+      if(!val || val==='Waiting for input…') return;
+      navigator.clipboard.writeText(val);
+      b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1200);
+    });
+  });
+}
+async function updateHashes(){
+  const text = hashInput.value;
+  const lines = hashResults.querySelectorAll('.hashline');
+  if(!text){
+    lines.forEach(l=>{ const v=l.querySelector('.val'); v.textContent='Waiting for input…'; v.classList.add('empty'); });
+    return;
+  }
+  for(const a of algos){
+    const val = await a.fn(text);
+    const line = hashResults.querySelector(`[data-algo="${a.label}"] .val`);
+    line.textContent = val;
+    line.classList.remove('empty');
+  }
+}
+renderHashSkeleton();
+hashInput.addEventListener('input', updateHashes);
+
+/* ---------------- Password strength ---------------- */
+const pwInput = document.getElementById('pwInput');
+const pwToggle = document.getElementById('pwToggle');
+const meterFill = document.getElementById('meterFill');
+const strengthLabel = document.getElementById('strengthLabel');
+const checklist = document.getElementById('checklist');
+const crackTime = document.getElementById('crackTime');
+
+pwToggle.addEventListener('click', ()=>{
+  const isPw = pwInput.type === 'password';
+  pwInput.type = isPw ? 'text' : 'password';
+  pwToggle.textContent = isPw ? 'Hide' : 'Show';
+});
+
+const commonPasswords = new Set(['password','123456','123456789','qwerty','abc123','password1',
+  'admin','letmein','welcome','monkey','iloveyou','111111','12345678','sunshine','football','dragon']);
+
+function analyzePassword(pw){
+  const checks = [
+    {label:'12+ characters', pass: pw.length>=12},
+    {label:'Uppercase letter', pass: /[A-Z]/.test(pw)},
+    {label:'Lowercase letter', pass: /[a-z]/.test(pw)},
+    {label:'Number', pass: /[0-9]/.test(pw)},
+    {label:'Symbol', pass: /[^A-Za-z0-9]/.test(pw)},
+    {label:'Not a common password', pass: !commonPasswords.has(pw.toLowerCase())},
+    {label:'No 3+ repeated chars', pass: !/(.)\1{2,}/.test(pw)},
+    {label:'No obvious sequence', pass: !/(012|123|234|345|456|567|678|789|890|abc|bcd|cde|qwe|asd|zxc)/i.test(pw)},
+  ];
+  let poolSize = 0;
+  if(/[a-z]/.test(pw)) poolSize += 26;
+  if(/[A-Z]/.test(pw)) poolSize += 26;
+  if(/[0-9]/.test(pw)) poolSize += 10;
+  if(/[^A-Za-z0-9]/.test(pw)) poolSize += 32;
+  const entropyBits = pw.length>0 ? pw.length * Math.log2(Math.max(poolSize,1)) : 0;
+
+  const passed = checks.filter(c=>c.pass).length;
+  let score, label, color;
+  if(pw.length===0){score=0;label='—';color='var(--muted)';}
+  else if(entropyBits<28 || passed<=2){score=20;label='Very weak';color='var(--red)';}
+  else if(entropyBits<36 || passed<=4){score=40;label='Weak';color='var(--red)';}
+  else if(entropyBits<50 || passed<=5){score=60;label='Fair';color='var(--amber)';}
+  else if(entropyBits<70 || passed<=7){score=80;label='Strong';color='var(--cyan)';}
+  else {score=100;label='Very strong';color='var(--green)';}
+
+  // Rough offline-attack crack time estimate at 10^10 guesses/sec (modern GPU rig, fast hash)
+  const guessesPerSec = 1e10;
+  const seconds = Math.pow(2, entropyBits) / guessesPerSec / 2; // average case
+  return {checks, entropyBits, score, label, color, seconds};
+}
+
+function formatDuration(sec){
+  if(!isFinite(sec) || sec<=0) return 'instantly';
+  const units = [
+    ['century', 3153600000], ['year', 31536000], ['day', 86400],
+    ['hour', 3600], ['minute', 60], ['second', 1]
+  ];
+  for(const [name, secs] of units){
+    if(sec >= secs){
+      const val = sec/secs;
+      if(val > 1e6) return `>1,000,000 ${name}s`;
+      return `~${val.toLocaleString(undefined,{maximumFractionDigits: val<10?1:0})} ${name}${val>=2?'s':''}`;
+    }
+  }
+  return 'instantly';
+}
+
+function renderPw(){
+  const pw = pwInput.value;
+  const r = analyzePassword(pw);
+  meterFill.style.width = r.score + '%';
+  meterFill.style.background = r.color;
+  strengthLabel.textContent = r.label;
+  strengthLabel.style.color = r.color;
+  checklist.innerHTML = r.checks.map(c=>`
+    <li class="${c.pass?'pass':''}"><span class="chk">${c.pass?'✓':''}</span>${c.label}</li>
+  `).join('');
+  crackTime.innerHTML = pw ? `Estimated entropy: <b>${r.entropyBits.toFixed(1)} bits</b> · offline brute-force at 10<sup>10</sup> guesses/sec would take <b>${formatDuration(r.seconds)}</b> on average.` : '';
+}
+pwInput.addEventListener('input', renderPw);
+renderPw();
+
+/* ---------------- Encode / Decode ---------------- */
+const encFormat = document.getElementById('encFormat');
+const encInput = document.getElementById('encInput');
+const encOutput = document.getElementById('encOutput');
+let lastEdited = 'input';
+
+function toBase64(s){ return btoa(unescape(encodeURIComponent(s))); }
+function fromBase64(s){ try{ return decodeURIComponent(escape(atob(s))); } catch(e){ return '⚠ Invalid Base64'; } }
+function toHex(s){ return [...new TextEncoder().encode(s)].map(b=>b.toString(16).padStart(2,'0')).join(' '); }
+function fromHex(s){
+  try{
+    const clean = s.replace(/\s+/g,'');
+    if(clean.length % 2 !== 0) return '⚠ Invalid hex (odd length)';
+    const bytes = clean.match(/.{2}/g).map(h=>parseInt(h,16));
+    return new TextDecoder().decode(new Uint8Array(bytes));
+  } catch(e){ return '⚠ Invalid hex'; }
+}
+
+function encode(s, fmt){
+  if(fmt==='base64') return toBase64(s);
+  if(fmt==='url') return encodeURIComponent(s);
+  if(fmt==='hex') return toHex(s);
+}
+function decode(s, fmt){
+  if(fmt==='base64') return fromBase64(s);
+  if(fmt==='url') { try{return decodeURIComponent(s);}catch(e){return '⚠ Invalid URL encoding';} }
+  if(fmt==='hex') return fromHex(s);
+}
+
+encInput.addEventListener('input', ()=>{
+  lastEdited='input';
+  encOutput.value = encInput.value ? encode(encInput.value, encFormat.value) : '';
+});
+encOutput.addEventListener('input', ()=>{
+  lastEdited='output';
+  encInput.value = encOutput.value ? decode(encOutput.value, encFormat.value) : '';
+});
+encFormat.addEventListener('change', ()=>{
+  if(lastEdited==='input') encOutput.value = encInput.value ? encode(encInput.value, encFormat.value) : '';
+  else encInput.value = encOutput.value ? decode(encOutput.value, encFormat.value) : '';
+});
+
+/* ---------------- JWT Decoder ---------------- */
+const jwtInput = document.getElementById('jwtInput');
+const jwtOut = document.getElementById('jwtOut');
+
+function b64urlDecode(str){
+  str = str.replace(/-/g,'+').replace(/_/g,'/');
+  while(str.length % 4) str += '=';
+  return decodeURIComponent(escape(atob(str)));
+}
+
+function renderJwt(){
+  const token = jwtInput.value.trim();
+  if(!token){ jwtOut.innerHTML=''; return; }
+  const parts = token.split('.');
+  if(parts.length < 2){
+    jwtOut.innerHTML = `<div class="warnbox">Not a valid JWT — a token needs at least a header and payload segment separated by periods.</div>`;
+    return;
+  }
+  let header, payload, headerErr, payloadErr;
+  try{ header = JSON.parse(b64urlDecode(parts[0])); }catch(e){ headerErr=true; }
+  try{ payload = JSON.parse(b64urlDecode(parts[1])); }catch(e){ payloadErr=true; }
+
+  let html = '';
+  html += `<div class="card"><span class="tag warn">Header</span><div class="jwt-seg jwt-header">${headerErr?'⚠ Could not decode header':JSON.stringify(header,null,2)}</div>`;
+  html += `<span class="tag ok">Payload</span><div class="jwt-seg jwt-payload">${payloadErr?'⚠ Could not decode payload':JSON.stringify(payload,null,2)}</div>`;
+  html += `<span class="tag" style="background:rgba(245,166,35,.15);color:var(--amber);">Signature (not verified)</span><div class="jwt-seg jwt-sig">${parts[2] ? parts[2] : '(none)'}</div>`;
+
+  const warnings = [];
+  if(header && header.alg && header.alg.toLowerCase()==='none') warnings.push('Algorithm is "none" — this token requires no signature at all. If an API accepts this, it is critically vulnerable to auth bypass.');
+  if(header && /^hs/i.test(header.alg||'') === false && header && header.alg && /^rs|es|ps/i.test(header.alg)===false && header.alg.toLowerCase()!=='none') warnings.push(`Unrecognized algorithm "${header.alg}".`);
+  if(payload && payload.exp){
+    const expDate = new Date(payload.exp*1000);
+    const expired = expDate.getTime() < Date.now();
+    warnings.push(`Token ${expired?'expired':'expires'} at ${expDate.toISOString()} (${expired?'already expired':'still valid by clock'}).`);
+  }
+  if(!payload || !payload.exp) warnings.push('No "exp" claim present — this token never expires by itself.');
+
+  if(warnings.length){
+    html += `<div class="warnbox"><b>Notes:</b><br>${warnings.map(w=>'• '+w).join('<br>')}</div>`;
+  }
+  html += `</div>`;
+  jwtOut.innerHTML = html;
+}
+jwtInput.addEventListener('input', renderJwt);
+</script>
+</body>
+</html>
