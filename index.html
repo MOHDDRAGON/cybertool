@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-fqlJEpOhiSEHz5tnI/9kAswcpLMPbAwK+6gJqcnjCQg='; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>CyberTool Suite — Client-Side Security Utilities</title>
 <meta name="description" content="Dependency-free, browser-only toolkit for hashing, password strength analysis, encoding, and JWT decoding. Nothing leaves your machine.">
 <style>
@@ -223,6 +225,11 @@ async function sha(algo, text){
   return bufToHex(digest);
 }
 
+/* ---------------- Security: HTML escaping for anything derived from user input ---------------- */
+function escapeHtml(v){
+  return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 /* ---------------- MD5 (public-domain compact implementation) ---------------- */
 function md5(str){
   function rotl(x,c){return (x<<c)|(x>>>(32-c));}
@@ -309,7 +316,9 @@ function renderHashSkeleton(){
     });
   });
 }
+let hashRun = 0;
 async function updateHashes(){
+  const run = ++hashRun;
   const text = hashInput.value;
   const lines = hashResults.querySelectorAll('.hashline');
   if(!text){
@@ -318,6 +327,7 @@ async function updateHashes(){
   }
   for(const a of algos){
     const val = await a.fn(text);
+    if(run !== hashRun) return; // a newer keystroke superseded this run
     const line = hashResults.querySelector(`[data-algo="${a.label}"] .val`);
     line.textContent = val;
     line.classList.remove('empty');
@@ -456,7 +466,8 @@ const jwtOut = document.getElementById('jwtOut');
 function b64urlDecode(str){
   str = str.replace(/-/g,'+').replace(/_/g,'/');
   while(str.length % 4) str += '=';
-  return decodeURIComponent(escape(atob(str)));
+  const bin = atob(str);
+  return new TextDecoder('utf-8', {fatal:true}).decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
 }
 
 function renderJwt(){
@@ -471,23 +482,41 @@ function renderJwt(){
   try{ header = JSON.parse(b64urlDecode(parts[0])); }catch(e){ headerErr=true; }
   try{ payload = JSON.parse(b64urlDecode(parts[1])); }catch(e){ payloadErr=true; }
 
+  const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const hdr = isObj(header) ? header : null;
+  const pl  = isObj(payload) ? payload : null;
+
+  // Everything below that comes from the token is escaped before it touches innerHTML.
   let html = '';
-  html += `<div class="card"><span class="tag warn">Header</span><div class="jwt-seg jwt-header">${headerErr?'⚠ Could not decode header':JSON.stringify(header,null,2)}</div>`;
-  html += `<span class="tag ok">Payload</span><div class="jwt-seg jwt-payload">${payloadErr?'⚠ Could not decode payload':JSON.stringify(payload,null,2)}</div>`;
-  html += `<span class="tag" style="background:rgba(245,166,35,.15);color:var(--amber);">Signature (not verified)</span><div class="jwt-seg jwt-sig">${parts[2] ? parts[2] : '(none)'}</div>`;
+  html += `<div class="card"><span class="tag warn">Header</span><div class="jwt-seg jwt-header">${headerErr?'⚠ Could not decode header':escapeHtml(JSON.stringify(header,null,2))}</div>`;
+  html += `<span class="tag ok">Payload</span><div class="jwt-seg jwt-payload">${payloadErr?'⚠ Could not decode payload':escapeHtml(JSON.stringify(payload,null,2))}</div>`;
+  html += `<span class="tag" style="background:rgba(245,166,35,.15);color:var(--amber);">Signature (not verified)</span><div class="jwt-seg jwt-sig">${parts[2] ? escapeHtml(parts[2]) : '(none)'}</div>`;
 
   const warnings = [];
-  if(header && header.alg && header.alg.toLowerCase()==='none') warnings.push('Algorithm is "none" — this token requires no signature at all. If an API accepts this, it is critically vulnerable to auth bypass.');
-  if(header && /^hs/i.test(header.alg||'') === false && header && header.alg && /^rs|es|ps/i.test(header.alg)===false && header.alg.toLowerCase()!=='none') warnings.push(`Unrecognized algorithm "${header.alg}".`);
-  if(payload && payload.exp){
-    const expDate = new Date(payload.exp*1000);
-    const expired = expDate.getTime() < Date.now();
-    warnings.push(`Token ${expired?'expired':'expires'} at ${expDate.toISOString()} (${expired?'already expired':'still valid by clock'}).`);
+  const alg = hdr && typeof hdr.alg === 'string' ? hdr.alg : null;
+  if(alg && alg.toLowerCase()==='none'){
+    warnings.push('Algorithm is "none" — this token requires no signature at all. If an API accepts this, it is critically vulnerable to auth bypass.');
+  } else if(alg && !/^(hs|rs|es|ps)(256|384|512)$|^es256k$|^eddsa$/i.test(alg)){
+    warnings.push(`Unrecognized algorithm "${alg}".`);
   }
-  if(!payload || !payload.exp) warnings.push('No "exp" claim present — this token never expires by itself.');
+  if(pl){
+    if(typeof pl.exp === 'number' && isFinite(pl.exp)){
+      const expDate = new Date(pl.exp*1000);
+      if(isNaN(expDate.getTime())){
+        warnings.push('"exp" claim is not a valid timestamp.');
+      } else {
+        const expired = expDate.getTime() < Date.now();
+        warnings.push(`Token ${expired?'expired':'expires'} at ${expDate.toISOString()} (${expired?'already expired':'still valid by clock'}).`);
+      }
+    } else if(pl.exp !== undefined){
+      warnings.push('"exp" claim is present but is not a numeric timestamp.');
+    } else {
+      warnings.push('No "exp" claim present — this token never expires by itself.');
+    }
+  }
 
   if(warnings.length){
-    html += `<div class="warnbox"><b>Notes:</b><br>${warnings.map(w=>'• '+w).join('<br>')}</div>`;
+    html += `<div class="warnbox"><b>Notes:</b><br>${warnings.map(w=>'• '+escapeHtml(w)).join('<br>')}</div>`;
   }
   html += `</div>`;
   jwtOut.innerHTML = html;
